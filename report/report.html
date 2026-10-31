@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>AI物体探索ロボット 説明資料</title>
+<style>
+  @page { size: A4; margin: 13mm 14mm 13mm 14mm; }
+  :root { --ink:#1d2330; --sub:#5a6272; --line:#d9dde5; --accent:#c8501e; --soft:#f4f6f9; }
+  body { font-family: "Noto Sans CJK JP", "Noto Sans JP", sans-serif; color: var(--ink);
+         font-size: 9.7pt; line-height: 1.55; margin: 0; }
+  h1 { font-size: 19pt; margin: 0 0 2mm; letter-spacing: .02em; }
+  .subtitle { color: var(--sub); font-size: 10.5pt; margin-bottom: 4mm; }
+  h2 { font-size: 12pt; border-left: 4px solid var(--accent); padding-left: 3mm; margin: 5mm 0 2mm;
+       break-after: avoid; }
+  h3 { break-after: avoid; }
+  table, figure, .diagram { break-inside: avoid; }
+  td.num, th.num { white-space: nowrap; }
+  h3 { font-size: 10.8pt; margin: 4mm 0 1.5mm; }
+  p { margin: 1.2mm 0 2mm; }
+  ul, ol { margin: 1mm 0 2mm; padding-left: 6mm; }
+  li { margin: .6mm 0; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 3mm; font-size: 8.9pt; }
+  th, td { border: 1px solid var(--line); padding: 1.4mm 2.2mm; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-weight: 600; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .meta { display: grid; grid-template-columns: 26mm 1fr; gap: .8mm 3mm; font-size: 9.6pt;
+          background: var(--soft); padding: 3mm 4mm; border-radius: 2mm; }
+  .meta b { color: var(--sub); font-weight: 600; }
+  figure { margin: 3mm 0; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid var(--line); }
+  figcaption { font-size: 8.8pt; color: var(--sub); margin-top: 1mm; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; align-items: start; }
+  .flow { display: flex; flex-wrap: wrap; gap: 1.5mm; align-items: center; font-size: 9pt; margin: 2mm 0; }
+  .flow span.box { border: 1px solid var(--line); background: #fff; border-radius: 1.5mm; padding: 1mm 2mm; }
+  .flow span.arrow { color: var(--sub); }
+  code { font-family: "Noto Sans Mono CJK JP", monospace; font-size: 8.8pt; background: var(--soft);
+         padding: 0 1mm; border-radius: 1mm; }
+  .small { font-size: 8.8pt; color: var(--sub); }
+  .pb { break-before: page; }
+  .note { border: 1px solid var(--line); border-radius: 2mm; padding: 2mm 3mm; background: #fffaf3; font-size: 9.4pt; }
+</style>
+</head>
+<body>
+
+<h1>AI物体探索ロボット：YOLO × ROS 2 × Gazebo</h1>
+<div class="subtitle">Physical AI 応用1講座 最終課題 説明資料</div>
+
+<div class="meta">
+  <b>課題名</b><span>AI×ロボティクスによる創造的タスクの実現</span>
+  <b>タスク</b><span>指定された物体を部屋の中から自律的に探し出し、近づいて、地図上の位置を記録する。見かけた物は記憶し、後から日本語で頼まれた物へ直行する</span>
+  <b>使用ツール</b><span>ROS 2 Jazzy / Gazebo Harmonic / Ultralytics YOLO11（推論のみ） / Python</span>
+  <b>ベース</b><span>最終課題サンプル「gazeboとROS2を連携してロボットを操作する」（Qiita, 初級・おすすめ）</span>
+  <b>動画</b><span>⟪YOUTUBE_URL⟫（約1分34秒、本編は2倍速）</span>
+  <b>コード</b><span>⟪GITHUB_URL⟫</span>
+</div>
+
+<h2>1. 概要と目的</h2>
+<p>
+家庭・オフィス・倉庫などで「〇〇はどこにある？」を確かめる作業は、人手がかかる割に単純です。
+本課題では、<b>カメラ画像をAI（YOLO）で推論して物体を認識し、指定された物体を自律的に探し回って位置を記録する移動ロボット</b>を
+シミュレーション上に実装しました。ユーザーは「消火栓と椅子を探して」のように探す物を指定するだけで、
+ロボットは見えない物を探索し、見つけたら近づいて、その位置を地図上に記録します。
+</p>
+<p>
+ベースのサンプルは「Gazebo上の差動二輪ロボットにROS 2からキーボードで速度指令を送る」ものでした。
+本課題ではこれを出発点に、<b>センサー（カメラ・LiDAR）の追加、AIによる認識、認識結果にもとづく自律行動</b>まで発展させました。
+</p>
+
+<figure>
+  <img src="figs/overview.png" style="width:86%">
+  <figcaption>図1 デモ動画の画面。左：俯瞰カメラ（オレンジ線が軌跡、★が発見した物体と推定位置）、右上：ロボット視点とYOLO検出結果、右下：状態表示</figcaption>
+</figure>
+
+<h2>2. サンプルからの発展点</h2>
+<table>
+  <tr><th style="width:18%"></th><th style="width:36%">ベースのサンプル</th><th>本課題</th></tr>
+  <tr><td>ロボット</td><td>SDFの差動二輪（DiffDriveプラグイン）</td><td>同じ構成をもとに自作。<b>前方RGBカメラ・360° LiDAR</b>を搭載</td></tr>
+  <tr><td>操作</td><td>キーボードteleopのみ</td><td><b>YOLOによる自律探索</b>。teleopも残し、<code>m</code>キーで手動⇔自動を切替</td></tr>
+  <tr><td>AI</td><td>なし</td><td><b>YOLO11n（COCO 80クラス学習済み）で物体検出</b>（推論のみ、CPU）</td></tr>
+  <tr><td>行動</td><td>キーに対応する速度を送るだけ</td><td>回転探索 → 未探索方向へ移動 → 発見 → 視覚サーボで接近 → LiDARで停止 → 位置記録 → 次の目標</td></tr>
+  <tr><td>指示</td><td>キー入力</td><td>日本語・英語の指示文（例：<code>消火栓と椅子を探して</code>、<code>止まって</code>）</td></tr>
+  <tr><td>ブリッジ</td><td><code>/cmd_vel</code> のみ（yaml設定）</td><td>同じyaml方式で <code>/camera/image_raw</code> <code>/scan</code> <code>/odom</code> <code>/clock</code> などを追加</td></tr>
+  <tr><td>出力</td><td>なし</td><td>発見した物体の位置（<code>/search/found</code>）、デモ動画の自動合成</td></tr>
+</table>
+
+<h2>3. システム構成</h2>
+<div class="diagram">
+<svg viewBox="0 0 760 190" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Noto Sans CJK JP, sans-serif">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#5a6272"/></marker></defs>
+  <g stroke="#5a6272" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+    <path d="M140,62 L228,38"/>
+    <path d="M378,38 L458,70"/>
+    <path d="M140,95 L458,95"/>
+    <path d="M535,125 L535,170 L75,170 L75,128"/>
+    <path d="M458,112 L378,140"/>
+    <path d="M660,52 L612,72"/>
+    <path d="M140,108 L228,140"/>
+  </g>
+  <g font-size="11" fill="#5a6272">
+    <text x="62" y="36">/camera/image_raw</text>
+    <text x="385" y="45">/yolo/detections</text>
+    <text x="215" y="90">/scan（LiDAR）・/ground_truth（自己位置）</text>
+    <text x="250" y="184">/cmd_vel（速度指令）</text>
+    <text x="388" y="137">/search/status</text>
+    <text x="150" y="137">俯瞰画像</text>
+  </g>
+  <rect x="10" y="55" width="130" height="72" rx="6" fill="#eef2f8" stroke="#8a94a6"/>
+  <text x="75" y="84" font-size="13" text-anchor="middle" font-weight="700" fill="#1d2330">Gazebo</text>
+  <text x="75" y="103" font-size="10.5" text-anchor="middle" fill="#1d2330">ロボット（カメラ・LiDAR）</text>
+  <text x="75" y="117" font-size="10.5" text-anchor="middle" fill="#1d2330">部屋・物体</text>
+  <rect x="230" y="12" width="148" height="52" rx="6" fill="#fff4ec" stroke="#c8501e"/>
+  <text x="304" y="34" font-size="12.5" text-anchor="middle" font-weight="700" fill="#1d2330">yolo_detector</text>
+  <text x="304" y="52" font-size="10.5" text-anchor="middle" fill="#1d2330">YOLO11n で物体検出</text>
+  <rect x="460" y="55" width="152" height="70" rx="6" fill="#fff4ec" stroke="#c8501e"/>
+  <text x="536" y="76" font-size="12.5" text-anchor="middle" font-weight="700" fill="#1d2330">search_controller</text>
+  <text x="536" y="94" font-size="10.5" text-anchor="middle" fill="#1d2330">状態機械・探索地図</text>
+  <text x="536" y="109" font-size="10.5" text-anchor="middle" fill="#1d2330">意味地図（記憶）</text>
+  <rect x="230" y="118" width="148" height="40" rx="6" fill="#eef2f8" stroke="#8a94a6"/>
+  <text x="304" y="136" font-size="12" text-anchor="middle" font-weight="700" fill="#1d2330">demo_recorder</text>
+  <text x="304" y="151" font-size="10" text-anchor="middle" fill="#1d2330">動画の合成・録画</text>
+  <rect x="640" y="14" width="112" height="40" rx="6" fill="#f2f8ef" stroke="#6a9a5a"/>
+  <text x="696" y="31" font-size="11" text-anchor="middle" font-weight="700" fill="#1d2330">ユーザーの指示</text>
+  <text x="696" y="47" font-size="10" text-anchor="middle" fill="#1d2330">「人を探して」</text>
+</svg>
+</div>
+<ul>
+  <li><b>yolo_detector</b>：カメラ画像（640×480）をYOLO11nで推論し、<code>vision_msgs/Detection2DArray</code>（クラス名・信頼度・枠）と枠を描いた画像を出力。CPUでの推論遅れが溜まらないよう、常に最新の1枚だけを処理。</li>
+  <li><b>search_controller</b>：検出結果・LiDAR・自己位置から行動を決める状態機械（4章）。指示文の受付、キーボード操作の割り込み、発見位置の記録も担当。</li>
+  <li><b>keyboard_teleop</b>：サンプルのteleopと同じ考え方（w/a/s/d）のキー操作。手動モード中はこちらが優先。</li>
+  <li><b>demo_recorder</b>：俯瞰カメラ・YOLO画像・状態を1画面に合成して動画に保存（提出動画はこれで作成）。</li>
+  <li>起動はlaunchファイル1本（サンプルと同じく、環境変数設定 → Gazebo起動 → yaml設定のブリッジ → 各ノード）。</li>
+</ul>
+
+<h2>4. AIの活用と行動の設計</h2>
+<h3>4.1 物体検出（YOLO11、推論のみ）</h3>
+<p>
+COCOデータセットで学習済みのYOLO11を、そのまま推論に使いました（学習はしていません）。
+COCOの80クラスに含まれる物なら探索目標にできます（人・椅子・消火栓・ボトル・テレビなど）。
+モデルの選定のため、ロボットを椅子から1.5〜5 mの位置に置いて撮影した画像で、小型のnと一段大きいsを比較しました。
+</p>
+<table>
+  <tr><th>椅子までの距離・見る角度</th><th class="num">YOLO11n の信頼度</th><th class="num">YOLO11s の信頼度</th></tr>
+  <tr><td>1.5 m・30°</td><td class="num">0.83</td><td class="num">0.63</td></tr>
+  <tr><td>1.5 m・60°</td><td class="num">0.89</td><td class="num">0.61</td></tr>
+  <tr><td>3.0 m・20°</td><td class="num">0.93</td><td class="num">0.91</td></tr>
+  <tr><td>3.0 m・45°</td><td class="num">0.92</td><td class="num">0.81</td></tr>
+  <tr><td>5.0 m・10°</td><td class="num">0.87</td><td class="num">0.91</td></tr>
+  <tr><td>5.0 m・30°</td><td class="num">0.79</td><td class="num">0.91</td></tr>
+  <tr><th>1枚あたりの推論時間（CPU、単体）</th><th class="num">約 75 ms</th><th class="num">約 170 ms</th></tr>
+</table>
+<p>
+nモデルはどの距離でも信頼度0.79以上で検出でき、sより約2.3倍速かったため、<b>YOLO11n</b>を採用しました。
+GPUなしの環境では、シミュレータの描画と同時に動かすと1枚あたり約200 ms（約5 Hz）でした。
+</p>
+
+<h3>4.2 探索・接近の流れ（状態機械）</h3>
+<ol>
+  <li><b>記憶の確認</b>：目標を以前に見かけていれば（4.3の意味地図）、その場所へ経路を計画して直行する。</li>
+  <li><b>回転探索</b>：その場で360°回転しながらYOLOで目標を探す。候補が見えたら回転を遅くし、<b>3フレーム連続</b>で検出できたら「発見」とする（誤検出対策）。</li>
+  <li><b>フロンティア探索</b>：見つからなければ、<b>カメラでまだ見ていない領域との境界（フロンティア）</b>のうち最も近い所へ、地図上で計画した経路で移動し、再び回転探索する。</li>
+  <li><b>接近（視覚サーボ）</b>：枠の横位置から目標の方位を計算し、比例制御で向きを合わせながら前進。向きのずれが大きいときは減速し、手前に障害物があれば回避する。</li>
+  <li><b>停止と位置の記録</b>：目標までの距離が0.9 m以下になったら停止し、「ロボットの位置＋方位＋距離」から物体の地図上の位置を計算して記録する。</li>
+  <li>記録したら次の目標へ。すべて見つけたらミッション完了。その後も日本語の指示で新しい目標を探せる。</li>
+</ol>
+
+<h3>4.3 地図と記憶</h3>
+<ul>
+  <li><b>カメラで確認済みの地図</b>：0.25 m四方の格子地図に、LiDARで分かる「通れる所／壁」と、<b>カメラの視野（±37°、5 m以内）に入った所</b>を記録します。
+  LiDARは360°見えますがYOLOが使うカメラは前方しか見えないため、「探した」の判定はカメラの視野で行うのがポイントです。
+  壁から0.5 m以内を通れない所として幅優先探索（BFS）で経路を計画します（計算は1回20 ms程度）。</li>
+  <li><b>意味地図（見かけた物の記憶）</b>：YOLOが検出した物は、目標でなくてもすべて「クラス名＋地図上の位置」として記憶します（3回以上観測したものだけを採用）。
+  後から「人を探して」のように頼まれたとき、記憶にあれば探し回らずにその場所へ直行します。</li>
+</ul>
+
+<h3>4.4 工夫した点</h3>
+<ul>
+  <li><b>推論遅延の補正</b>：CPU推論は約0.2秒遅れるため、そのまま画像上の方位で制御すると回転中に行き過ぎます。そこで、<b>画像を撮った時刻のロボットの向き</b>を自己位置の履歴から引き、検出方位を<b>地図座標の方位</b>に変換してから制御しました。</li>
+  <li><b>2つの方法で距離を測る</b>：検出した方位の<b>LiDAR距離</b>と、<b>枠の下端（物体が床に接する点）とカメラの高さから計算した距離</b>（地面拘束による単眼距離推定：距離 = カメラ高さ × 焦点距離 ÷ 画像中心から下端までの画素数）の小さい方を使います。
+  LiDARの走査面（高さ0.2 m）は椅子の細い脚の間を通り抜けてしまうことがあり、実際に椅子の手前で止まれない問題がありましたが、これで解決しました。</li>
+  <li><b>誤検出の防止</b>：「1つの物体が2つのクラスになることはない」と考え、発見済みの物体から1 m以内の検出は他クラスとして扱わないようにしました（近距離の消火栓を「椅子」と誤認して到着扱いになる問題がありました）。</li>
+  <li><b>見失いへの対処</b>：遠くの小さな物体は検出が途切れやすいため、見失っても4秒間は最後に見えた方向へ減速して進み続け、それでも見えなければ見えた側へ回転して探し直します。</li>
+  <li><b>目標の手前の障害物の回避</b>：目標よりも近くに物がある場合は空いている側へよけます。よける動作は一定時間続け、「よける↔向き直る」の振動を防ぎました。</li>
+  <li><b>目標だけを追う／それ以外は覚えておく</b>：人はスタート地点から見えていますが、最初のミッションの目標ではないので追いかけません。ただし位置は記憶しておき、後で「人を探して」と頼まれたときに直行します。</li>
+  <li><b>日本語の指示</b>：<code>/search/command</code> に「消火栓と椅子を探して」のような文を送ると、含まれる物体名（日本語・英語の別名に対応）を出現順に読み取り、目標リストを入れ替えます。「止まって」「手動」「自動」にも対応。</li>
+  <li><b>見せ方</b>：俯瞰カメラと軌跡、YOLOの検出画像、状態・目標リスト・発見位置を1画面にまとめて動画化しました。CPUが重いときにコマが抜けても、<b>動画の時間がシミュレーション時間と一致する</b>ようにしています（2倍速表示を正確にするため）。</li>
+</ul>
+
+<h2>5. 結果</h2>
+<p>
+10 m × 10 m の部屋を間仕切りで4つのエリアに分け、<b>消火栓 → 椅子</b>の順に探すミッションを実行し、
+完了後に日本語で<b>「人を探して」</b>と指示しました。消火栓と椅子はスタート地点（南西のエリア）からは壁で見えない位置にあり、
+人は途中で何度も視界に入る位置（北東）にあります。
+</p>
+<table>
+  <tr><th>目標</th><th class="num">発見までの時間</th><th class="num">推定位置 [m]</th><th class="num">真値 [m]</th><th class="num">誤差</th><th>どう見つけたか</th></tr>
+  <tr><td>1. 消火栓</td><td class="num">58 秒</td><td class="num">(3.24, −3.66)</td><td class="num">(3.2, −3.6)</td><td class="num">0.07 m</td><td>フロンティア探索で2回移動して発見</td></tr>
+  <tr><td>2. 椅子</td><td class="num">103 秒</td><td class="num">(−3.45, 3.49)</td><td class="num">(−3.6, 3.6)</td><td class="num">0.19 m</td><td>フロンティア探索で1回移動して発見</td></tr>
+  <tr><td>3. 人（指示）</td><td class="num">133 秒</td><td class="num">(3.59, 3.66)</td><td class="num">(3.6, 3.6)</td><td class="num">0.06 m</td><td>指示を受け<b>記憶から直行</b>（約21秒）</td></tr>
+</table>
+<p class="small">時間はシミュレーション時間（ミッション開始から）。真値はワールドファイルでの物体の配置位置。動画は同じ試行を2倍速で再生しています。</p>
+<p>
+改良後の構成で行った4回の試行では、<b>4回とも消火栓と椅子を発見</b>しました（消火栓 57〜58秒、椅子 103〜104秒）。
+人は、3つ目の目標として探した回も、完了後の指示で探した回も、記憶から直行して見つけました（126〜133秒）。
+推定位置の誤差はすべて0.2 m以内でした。
+</p>
+<div class="two">
+<figure>
+  <img src="figs/camera.png">
+  <figcaption>図2 ロボット視点の画像とYOLOの検出結果（椅子 0.83）</figcaption>
+</figure>
+<figure>
+  <img src="figs/memory.png">
+  <figcaption>図3 「人を探して」の指示直後。記憶した人の位置（○）へ経路（白線）を計画して直行</figcaption>
+</figure>
+</div>
+
+<h2>6. 試行錯誤の記録</h2>
+<table>
+  <tr><th style="width:24%">問題</th><th>原因</th><th style="width:34%">対策</th></tr>
+  <tr><td>物体の推定位置が後になるほどずれる（0.2 → 0.6 m）</td><td>車輪オドメトリの誤差が蓄積</td><td>自己位置にシミュレータの真値を使用（実機ではSLAM/AMCLに相当）</td></tr>
+  <tr><td>同じ場所ばかり探して人が見つからない</td><td>「通った地点から遠い方向」を選ぶだけで、カメラで見た範囲を考えていなかった</td><td>カメラの視野で作る地図＋フロンティア探索</td></tr>
+  <tr><td>2回目以降の経路計画が失敗</td><td>ブレーキ時に車体が前傾し、LiDARが床を障害物として検出</td><td>前輪キャスターの追加、複数回観測した所だけを障害物とする</td></tr>
+  <tr><td>椅子の手前で止まらない</td><td>LiDARの走査面が椅子の脚の間を通過</td><td>枠の下端から計算する単眼距離を併用</td></tr>
+  <tr><td>消火栓を「椅子」と誤認</td><td>近距離で物体の一部だけが写ると誤分類</td><td>発見済み物体の周囲1 mの検出を除外</td></tr>
+  <tr><td>動画の再生速度が不正確</td><td>CPUが重いと録画のコマが抜ける</td><td>抜けたコマを複製し、動画の時間＝シミュレーション時間に</td></tr>
+</table>
+
+<h2>7. 考察と今後の課題</h2>
+<ul>
+  <li><b>自己位置推定</b>：今回は簡単化のため、自己位置にシミュレータの真値を使いました（実機ではSLAMやAMCLに置き換える部分です）。
+  車輪オドメトリだけを使った試行では、4分ほどの走行で物体の推定位置の誤差が0.2 mから0.5〜0.6 mに増えました。
+前輪キャスターを追加して車体の前傾を防いだ後は、約2分の走行でのオドメトリのずれは0.1〜0.2 mに減りましたが、時間とともに増えることに変わりはありません。実機では自己位置推定が不可欠です。</li>
+  <li><b>探索の効率</b>：フロンティア探索により無駄な往復は減りましたが、毎回360°回転するため時間がかかります。カメラの視野が未確認の方向だけを向く回転や、複数のカメラの利用で短縮できます。</li>
+  <li><b>認識の限界</b>：COCOの80クラス以外の物は探せません。YOLO-Worldのようなオープン語彙の検出器や、LLMと組み合わせれば「赤いマグカップ」のような自由な言葉で探せるようになります。また、遠くの小さな物体は検出が途切れやすく、接近中に見失う場面がありました。</li>
+  <li><b>実機への展開</b>：ROS 2のトピック構成（<code>/camera/image_raw</code> <code>/scan</code> <code>/cmd_vel</code>）はTurtleBotなど一般的な移動ロボットと同じなので、ノードはほぼそのまま実機で使えます。GPUがあれば推論は30 fps程度になり、反応も速くなります。</li>
+</ul>
+
+<h2>8. 実行方法</h2>
+<p class="small">
+<code>colcon build</code> 後、<code>ros2 launch yolo_search_robot yolo_search.launch.py</code>（GUI付き）。
+GUIなしで録画する場合は <code>headless:=true record:=true</code>。キーボード操作は <code>teleop:=true</code>。
+詳細はリポジトリのREADMEを参照。Ubuntu 24.04 / ROS 2 Jazzy / Gazebo Harmonic（GPUなし）で動作を確認しました。
+物体の3Dモデルは Gazebo Fuel（OpenRobotics）のものを使用しています。
+</p>
+
+</body>
+</html>

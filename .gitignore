@@ -1,0 +1,12 @@
+# colcon
+build/
+install/
+log/
+# python
+__pycache__/
+*.pyc
+# large / generated files
+*.mp4
+*.pt
+submission/
+report/*.pdf

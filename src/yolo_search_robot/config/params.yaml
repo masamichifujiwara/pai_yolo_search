@@ -1,0 +1,44 @@
+yolo_detector:
+  ros__parameters:
+    model: "yolo11n.pt"        # Ultralytics COCO model (downloaded automatically on first run)
+    confidence: 0.40           # detections below this score are not published / drawn
+    image_size: 640
+    device: "cpu"
+
+search_controller:
+  ros__parameters:
+    # Objects to find, in order (COCO class names). Can be changed at runtime, e.g.
+    #   ros2 topic pub --once /search/command std_msgs/msg/String "{data: '人を探して'}"
+    targets: ["fire hydrant", "chair"]
+    confidence: 0.50           # minimum YOLO score to accept a detection of the target
+    confirm_frames: 3          # consecutive detections needed before approaching
+    lost_timeout: 4.0          # [s] target not seen for this long -> search again
+    stop_distance: 0.9         # [m] stop this far from the object (LiDAR)
+    max_linear: 0.35           # [m/s]
+    max_angular: 0.8           # [rad/s]
+    spin_speed: 0.60           # [rad/s] rotation speed while scanning
+    k_bearing: 1.6             # P gain: bearing error -> angular velocity
+    camera_hfov: 1.3           # must match the camera in models/search_robot/model.sdf
+    image_width: 640
+    image_height: 480
+    obstacle_distance: 0.45    # [m] stop driving forward when something is closer than this
+    explore_step: 2.5          # [m] max length of one move (fallback exploration)
+    use_frontier: true         # frontier-based exploration on the camera coverage grid
+    view_range: 5.0            # [m] distance up to which a camera-visible cell counts as seen
+    exclusion_radius: 1.0      # [m] ignore target detections near objects already found
+    arrived_pause: 3.0         # [s] wait at each found object
+    spawn_x: -3.5              # robot spawn pose in the world (odom -> world conversion)
+    spawn_y: -3.5
+    spawn_yaw: 0.0
+    pose_source: "ground_truth"  # localisation: simulator ground truth (stands in for SLAM/AMCL)
+                               # or "odom" (wheel odometry only, drifts over time)
+    auto_start: true
+    start_delay: 3.0
+
+demo_recorder:
+  ros__parameters:
+    fps: 10.0
+    overhead_height: 12.0      # must match the overhead camera in worlds/search_arena.sdf
+    overhead_hfov: 0.9
+    overhead_x: 0.0
+    overhead_y: 0.0
