@@ -265,6 +265,7 @@ class SearchController(Node):
 
     def on_teleop(self, msg):
         self.teleop_cmd = msg
+        self.teleop_last_t = self.now()
 
     def on_mode(self, msg):
         self.handle_mode(msg.data.strip().lower())
