@@ -152,6 +152,7 @@ class SearchController(Node):
         self.found = []                       # dicts: class, x, y (world)
         self.arrived_t = None
         self.teleop_cmd = Twist()
+        self.teleop_last_t = None
         self.event = ''                       # last human-readable event (for the video)
         self.t_start = None
         self.yolo_ready = False               # set on the first /yolo/detections message
