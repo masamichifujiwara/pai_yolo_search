@@ -363,7 +363,10 @@ class SearchController(Node):
         confirmed = self.hits >= self.confirm_frames and self.target is not None
 
         if self.state == self.MANUAL:
-            cmd = self.teleop_cmd
+            if self.teleop_last_t is None or now - self.teleop_last_t > self.teleop_timeout:
+                pass                    # 何もしない → cmd は0のまま = 停止
+            else:
+                cmd = self.teleop_cmd
 
         elif self.state in (self.SPIN, self.TURN_TO, self.MOVE) and confirmed:
             self.set_state(self.APPROACH, f'{ja(self.target)} を発見! 接近します')
