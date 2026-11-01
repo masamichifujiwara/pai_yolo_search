@@ -68,7 +68,7 @@ YOLOの重み（`yolo11n.pt`）は初回起動時に自動でダウンロード�
 
 ```bash
 mkdir -p ~/ws/src && cd ~/ws/src
-git clone <このリポジトリ> pai_yolo_search
+git clone https://github.com/masamichifujiwara/pai_yolo_search.git
 ln -s pai_yolo_search/src/yolo_search_robot .
 cd ~/ws && colcon build --symlink-install
 source install/setup.bash
