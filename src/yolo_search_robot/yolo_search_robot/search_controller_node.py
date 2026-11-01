@@ -66,6 +66,7 @@ class SearchController(Node):
         p('confidence', 0.45)
         p('confirm_frames', 3)
         p('lost_timeout', 2.5)
+        p('teleop_timeout',0.5)
         p('stop_distance', 0.9)
         p('max_linear', 0.30)
         p('max_angular', 0.8)
@@ -99,6 +100,7 @@ class SearchController(Node):
         self.conf = float(g('confidence'))
         self.confirm_frames = int(g('confirm_frames'))
         self.lost_timeout = float(g('lost_timeout'))
+        self.teleop_timeout = float(g('teleop_timeout'))
         self.stop_distance = float(g('stop_distance'))
         self.max_lin = float(g('max_linear'))
         self.max_ang = float(g('max_angular'))
@@ -150,6 +152,7 @@ class SearchController(Node):
         self.found = []                       # dicts: class, x, y (world)
         self.arrived_t = None
         self.teleop_cmd = Twist()
+        self.teleop_last_t = None
         self.event = ''                       # last human-readable event (for the video)
         self.t_start = None
         self.yolo_ready = False               # set on the first /yolo/detections message
@@ -262,6 +265,7 @@ class SearchController(Node):
 
     def on_teleop(self, msg):
         self.teleop_cmd = msg
+        self.teleop_last_t = self.now()
 
     def on_mode(self, msg):
         self.handle_mode(msg.data.strip().lower())
@@ -359,7 +363,10 @@ class SearchController(Node):
         confirmed = self.hits >= self.confirm_frames and self.target is not None
 
         if self.state == self.MANUAL:
-            cmd = self.teleop_cmd
+            if self.teleop_last_t is None or now - self.teleop_last_t > self.teleop_timeout:
+                pass                    # 何もしない → cmd は0のまま = 停止
+            else:
+                cmd = self.teleop_cmd
 
         elif self.state in (self.SPIN, self.TURN_TO, self.MOVE) and confirmed:
             self.set_state(self.APPROACH, f'{ja(self.target)} を発見! 接近します')

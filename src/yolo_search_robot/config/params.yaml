@@ -13,6 +13,7 @@ search_controller:
     confidence: 0.50           # minimum YOLO score to accept a detection of the target
     confirm_frames: 3          # consecutive detections needed before approaching
     lost_timeout: 4.0          # [s] target not seen for this long -> search again
+    teleop_timeout: 0.5
     stop_distance: 0.9         # [m] stop this far from the object (LiDAR)
     max_linear: 0.35           # [m/s]
     max_angular: 0.8           # [rad/s]

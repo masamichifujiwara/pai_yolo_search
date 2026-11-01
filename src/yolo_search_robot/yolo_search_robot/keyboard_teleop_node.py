@@ -69,6 +69,7 @@ def main(args=None):
                 if key == '\x03':
                     break
                 node.handle_key(key)
+            node.cmd_pub.publish(node.cmd)
     except KeyboardInterrupt:
         pass
     finally:
